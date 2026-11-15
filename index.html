@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tracker — Admin</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg: #0a1020;
+    --panel: #0e1729;
+    --panel2: #121f36;
+    --line: #1f2d47;
+    --text: #e6eefb;
+    --muted: #8ba0bd;
+    --accent: #38bdf8;
+    --ok: #34d399;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    grid-template-rows: 56px 1fr;
+    grid-template-areas: "head head" "side main";
+    height: 100vh;
+    overflow: hidden;
+  }
+  header {
+    grid-area: head;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { font-weight: 700; letter-spacing: -0.02em; }
+  .brand span { color: var(--accent); }
+  .status { font-size: 0.76rem; color: var(--muted); }
+  aside {
+    grid-area: side;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 18px;
+    overflow-y: auto;
+  }
+  aside h2 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+  aside h2 .count { color: var(--accent); margin-left: 4px; }
+  .section { margin-bottom: 26px; }
+
+  input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: #0a1424;
+    color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font-weight: 600;
+    background: var(--accent);
+    color: #052033;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(0.99); }
+
+  #create-form { display: grid; gap: 8px; }
+
+  #linkbox {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    background: #0a1424;
+  }
+  #linkbox .note {
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  #linkbox code {
+    display: block;
+    word-break: break-all;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.74rem;
+    color: var(--accent);
+    line-height: 1.45;
+    margin-bottom: 10px;
+  }
+  #linkbox .row { display: flex; gap: 8px; }
+  #linkbox .row button { flex: 1; font-size: 0.8rem; padding: 8px 10px; }
+  #linkbox .row button.ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+
+  #list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .item {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel2);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .item:hover { border-color: #2c3f5e; }
+  .item.active { border-color: var(--accent); background: #0d2138; }
+  .item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .item-top strong { font-size: 0.92rem; font-weight: 600; }
+  .item-meta { font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
+  .item-actions { display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .item.active .item-actions { display: flex; }
+  .mini {
+    font-size: 0.72rem;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .mini:hover { color: var(--text); border-color: #2c3f5e; }
+  .mini.danger:hover { color: var(--danger); border-color: #4a2530; }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #3a4b66;
+    flex: 0 0 auto;
+  }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px #34d39922; }
+
+  .empty {
+    font-size: 0.82rem;
+    color: var(--muted);
+    padding: 6px 2px;
+  }
+
+  .hint {
+    font-size: 0.76rem;
+    color: #6f83a3;
+    line-height: 1.5;
+    margin-top: 16px;
+  }
+  .hint strong { color: var(--muted); }
+
+  main { grid-area: main; position: relative; }
+  #map { position: absolute; inset: 0; background: #0a1020; }
+
+  .map-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 14px 20px;
+    background: #0e1729ee;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-align: center;
+    max-width: 340px;
+    pointer-events: none;
+    z-index: 500;
+    box-shadow: 0 12px 30px #00000066;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">📍 Tracker <span>Admin</span></div>
+  <div class="status">Front-end demo · data stays in this browser</div>
+</header>
+
+<aside>
+  <div class="section">
+    <h2>New tracking link</h2>
+    <form id="create-form">
+      <input id="label" placeholder="Label (e.g. Mom, Delivery phone)" maxlength="60" />
+      <button type="submit">Create link</button>
+    </form>
+
+    <div id="linkbox" hidden>
+      <div class="note">Send this link. The person must open it and tap <em>Share my location</em>.</div>
+      <code id="linkurl"></code>
+      <div class="row">
+        <button type="button" id="copy" class="ghost">Copy</button>
+        <button type="button" id="open" class="ghost">Open</button>
+      </div>
+    </div>
+
+    <p class="hint">
+      <strong>How it works:</strong> create a link → send it → the person taps
+      <em>Share my location</em> → their position appears on the map.
+      Use <em>Demo walk</em> on any link to preview the map without a second device.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Links <span class="count" id="count"></span></h2>
+    <ul id="list"></ul>
+  </div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div id="empty" class="map-empty">Select a link on the left to see its location</div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+import { store } from './store.js';
+
+const $ = (s) => document.querySelector(s);
+
+let selectedId = null;
+let marker = null;
+let simTimer = null;
+let simState = null;
+
+/* ---------- map ---------- */
+const map = L.map('map', { zoomControl: true }).setView([25, 10], 2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 20,
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
+}).addTo(map);
+
+const trail = L.polyline([], { color: '#38bdf8', weight: 3, opacity: 0.85 }).addTo(map);
+
+/* ---------- helpers ---------- */
+function timeAgo(t) {
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return new Date(t).toLocaleDateString();
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+function metaText(s) {
+  if (!s.lastSeen) return 'waiting for target to allow…';
+  return `${timeAgo(s.lastSeen)} · ${s.history.length} points`;
+}
+
+function flash(el, text) {
+  const prev = el.textContent;
+  el.textContent = text;
+  setTimeout(() => (el.textContent = prev), 1500);
+}
+
+function updateEmptyOverlay() {
+  const el = $('#empty');
+  if (!selectedId) {
+    el.textContent = 'Select a link on the left to see its location';
+    el.hidden = false;
+    return;
+  }
+  const s = store.getSession(selectedId);
+  if (!s || !s.location) {
+    el.textContent = s
+      ? `Waiting for ${s.label} to open the link and share location…`
+      : 'Select a link on the left to see its location';
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+  }
+}
+
+/* ---------- list ---------- */
+function renderList() {
+  const sessions = store.listSessions();
+  const list = $('#list');
+  $('#count').textContent = sessions.length ? String(sessions.length) : '';
+
+  if (!sessions.length) {
+    list.innerHTML = '<li class="empty">No links yet. Create one above to get started.</li>';
+    return;
+  }
+
+  list.innerHTML = '';
+  for (const s of sessions) {
+    const li = document.createElement('li');
+    li.className = 'item' + (s.id === selectedId ? ' active' : '');
+    li.dataset.id = s.id;
+    const simulating = simState?.id === s.id;
+    li.innerHTML = `
+      <div class="item-top">
+        <strong>${escapeHtml(s.label)}</strong>
+        <span class="dot ${s.lastSeen ? 'on' : ''}"></span>
+      </div>
+      <div class="item-meta">${metaText(s)}</div>
+      <div class="item-actions">
+        <button class="mini" data-act="sim">${simulating ? 'Stop demo' : 'Demo walk'}</button>
+        <button class="mini" data-act="copy">Copy link</button>
+        <button class="mini danger" data-act="delete">Delete</button>
+      </div>
+    `;
+    list.appendChild(li);
+  }
+}
+
+$('#list').addEventListener('click', (e) => {
+  const li = e.target.closest('.item');
+  if (!li) return;
+  const id = li.dataset.id;
+  const act = e.target.closest('[data-act]')?.dataset.act;
+
+  if (act === 'sim') {
+    if (simState?.id === id) stopSimulation();
+    else startSimulation(id);
+    return;
+  }
+
+  if (act === 'copy') {
+    const url = new URL(`track.html?id=${id}`, location.href).href;
+    navigator.clipboard.writeText(url).then(
+      () => flash(e.target, 'Copied ✓'),
+      () => alert(url),
+    );
+    return;
+  }
+
+  if (act === 'delete') {
+    if (!confirm('Delete this link? The target will no longer be able to send location.')) return;
+    if (simState?.id === id) stopSimulation();
+    if (selectedId === id) {
+      selectedId = null;
+      trail.setLatLngs([]);
+      if (marker) { map.removeLayer(marker); marker = null; }
+      map.setView([25, 10], 2);
+    }
+    store.deleteSession(id);
+    return;
+  }
+
+  selectSession(id);
+});
+
+/* ---------- selection + drawing ---------- */
+function selectSession(id) {
+  selectedId = id;
+  renderList();
+  updateEmptyOverlay();
+
+  const s = store.getSession(id);
+  if (!s) return;
+
+  trail.setLatLngs(s.history.map((p) => [p.lat, p.lng]));
+
+  if (s.location) {
+    placeMarker(s.location);
+    if (s.history.length > 1) {
+      map.fitBounds(trail.getBounds().pad(0.2), { maxZoom: 16 });
+    } else {
+      map.setView([s.location.lat, s.location.lng], 16);
+    }
+  } else {
+    if (marker) { map.removeLayer(marker); marker = null; }
+    map.setView([25, 10], 2);
+  }
+}
+
+function onStoreChange() {
+  renderList();
+  if (!selectedId) { updateEmptyOverlay(); return; }
+
+  const s = store.getSession(selectedId);
+  if (!s) { updateEmptyOverlay(); return; }
+
+  trail.setLatLngs(s.history.map((p) => [p.lat, p.lng]));
+  if (s.location) {
+    placeMarker(s.location);
+    map.panTo([s.location.lat, s.location.lng]);
+  }
+  updateEmptyOverlay();
+}
+
+function placeMarker(p) {
+  const popup = `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` +
+                (p.accuracy ? `<br>±${Math.round(p.accuracy)} m` : '');
+  if (!marker) {
+    marker = L.marker([p.lat, p.lng]).addTo(map).bindPopup(popup);
+  } else {
+    marker.setLatLng([p.lat, p.lng]).setPopupContent(popup);
+  }
+}
+
+/* ---------- demo simulation ---------- */
+function startSimulation(id) {
+  stopSimulation();
+  const s = store.getSession(id);
+  if (!s) return;
+
+  const starts = [
+    { lat: 37.7749, lng: -122.4194 }, // San Francisco
+    { lat: 51.5074, lng: -0.1278 },   // London
+    { lat: 35.6762, lng: 139.6503 },  // Tokyo
+    { lat: -33.8688, lng: 151.2093 }, // Sydney
+  ];
+  const base = s.location || starts[Math.floor(Math.random() * starts.length)];
+
+  simState = { id, lat: base.lat, lng: base.lng, heading: Math.random() * 360 };
+
+  simTimer = setInterval(() => {
+    simState.heading += (Math.random() - 0.5) * 50;
+    const step = 5; // metres per tick
+    const rad = (simState.heading * Math.PI) / 180;
+    simState.lat += (step * Math.cos(rad)) / 111320;
+    simState.lng += (step * Math.sin(rad)) / (111320 * Math.cos((simState.lat * Math.PI) / 180));
+
+    store.postLocation(simState.id, {
+      lat: simState.lat,
+      lng: simState.lng,
+      accuracy: 6 + Math.random() * 10,
+      heading: simState.heading,
+      speed: 1.3,
+    });
+  }, 1500);
+
+  renderList();
+}
+
+function stopSimulation() {
+  if (simTimer) clearInterval(simTimer);
+  simTimer = null;
+  simState = null;
+  renderList();
+}
+
+/* ---------- create link ---------- */
+$('#create-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const label = $('#label').value.trim() || 'Someone';
+  const s = store.createSession({ label });
+  $('#label').value = '';
+
+  const url = new URL(`track.html?id=${s.id}`, location.href).href;
+  $('#linkurl').textContent = url;
+  $('#linkbox').hidden = false;
+
+  selectSession(s.id);
+});
+
+$('#copy').addEventListener('click', async () => {
+  const url = $('#linkurl').textContent;
+  try {
+    await navigator.clipboard.writeText(url);
+    flash($('#copy'), 'Copied ✓');
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents($('#linkurl'));
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+});
+
+$('#open').addEventListener('click', () => {
+  window.open($('#linkurl').textContent, '_blank');
+});
+
+/* ---------- init ---------- */
+renderList();
+updateEmptyOverlay();
+store.onChange(onStoreChange);
+
+// keep relative timestamps fresh without rebuilding the list
+setInterval(() => {
+  for (const li of document.querySelectorAll('.item')) {
+    const s = store.getSession(li.dataset.id);
+    const meta = li.querySelector('.item-meta');
+    if (s && meta) meta.textContent = metaText(s);
+  }
+}, 1000);
+</script>
+</body>
+</html>
